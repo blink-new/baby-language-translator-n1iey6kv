@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
-import { Mic, MicOff, Square } from 'lucide-react'
+import { Mic, Square } from 'lucide-react'
 import { blink } from '@/blink/client'
 
 interface AudioRecorderProps {
@@ -39,6 +39,13 @@ export function AudioRecorder({ onRecordingComplete }: AudioRecorderProps) {
 
       mediaRecorder.onstop = async () => {
         setIsAnalyzing(true)
+        setIsRecording(false)
+        setAudioLevel(0)
+        
+        // Stop animation frame
+        if (animationFrameRef.current) {
+          cancelAnimationFrame(animationFrameRef.current)
+        }
         
         const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/wav' })
         
@@ -81,23 +88,9 @@ export function AudioRecorder({ onRecordingComplete }: AudioRecorderProps) {
   }
 
   const stopRecording = () => {
-    if (mediaRecorderRef.current && isRecording) {
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
       mediaRecorderRef.current.stop()
-      setIsRecording(false)
-      setAudioLevel(0)
-      if (animationFrameRef.current) {
-        cancelAnimationFrame(animationFrameRef.current)
-      }
-    }
-  }
-
-  const toggleRecording = () => {
-    if (isAnalyzing) return // Prevent action while analyzing
-    
-    if (isRecording) {
-      stopRecording()
-    } else {
-      startRecording()
+      // State updates are handled in the onstop event handler
     }
   }
 
@@ -159,37 +152,54 @@ export function AudioRecorder({ onRecordingComplete }: AudioRecorderProps) {
     <Card className="w-full max-w-md mx-auto">
       <CardContent className="p-6 text-center">
         <div className="mb-6">
-          <div className="relative inline-block">
-            <Button
-              size="lg"
-              onClick={toggleRecording}
-              disabled={isAnalyzing}
-              className={`w-20 h-20 rounded-full transition-all duration-300 ${
-                isAnalyzing
-                  ? 'bg-accent hover:bg-accent/90'
-                  : isRecording 
-                    ? 'bg-red-500 hover:bg-red-600 animate-pulse' 
-                    : 'bg-primary hover:bg-primary/90'
-              }`}
-            >
-              {isAnalyzing ? (
-                <div className="animate-spin w-8 h-8 border-2 border-white border-t-transparent rounded-full" />
-              ) : isRecording ? (
-                <Square className="w-8 h-8" />
-              ) : (
-                <Mic className="w-8 h-8" />
+          <div className="flex justify-center items-center gap-4">
+            {/* Record Button */}
+            <div className="relative">
+              <Button
+                size="lg"
+                onClick={startRecording}
+                disabled={isRecording || isAnalyzing}
+                className={`w-20 h-20 rounded-full transition-all duration-300 ${
+                  isAnalyzing
+                    ? 'bg-accent hover:bg-accent/90'
+                    : isRecording 
+                      ? 'bg-gray-400 cursor-not-allowed' 
+                      : 'bg-primary hover:bg-primary/90'
+                }`}
+              >
+                {isAnalyzing ? (
+                  <div className="animate-spin w-8 h-8 border-2 border-white border-t-transparent rounded-full" />
+                ) : (
+                  <Mic className="w-8 h-8" />
+                )}
+              </Button>
+              
+              {/* Audio level visualization */}
+              {isRecording && (
+                <div className="absolute inset-0 rounded-full border-4 border-primary/30 animate-ping" 
+                     style={{ 
+                       transform: `scale(${1 + audioLevel * 0.5})`,
+                       opacity: audioLevel 
+                     }} 
+                />
               )}
-            </Button>
-            
-            {/* Audio level visualization */}
-            {isRecording && (
-              <div className="absolute inset-0 rounded-full border-4 border-primary/30 animate-ping" 
-                   style={{ 
-                     transform: `scale(${1 + audioLevel * 0.5})`,
-                     opacity: audioLevel 
-                   }} 
-              />
-            )}
+            </div>
+
+            {/* Stop Button */}
+            <div className="relative">
+              <Button
+                size="lg"
+                onClick={stopRecording}
+                disabled={!isRecording || isAnalyzing}
+                className={`w-20 h-20 rounded-full transition-all duration-300 ${
+                  isRecording && !isAnalyzing
+                    ? 'bg-red-500 hover:bg-red-600 animate-pulse' 
+                    : 'bg-gray-400 cursor-not-allowed'
+                }`}
+              >
+                <Square className="w-8 h-8" />
+              </Button>
+            </div>
           </div>
         </div>
 
@@ -199,15 +209,15 @@ export function AudioRecorder({ onRecordingComplete }: AudioRecorderProps) {
               ? 'Analyzing...' 
               : isRecording 
                 ? 'Recording...' 
-                : 'Tap to Record'
+                : 'Ready to Record'
             }
           </h3>
           <p className="text-sm text-muted-foreground">
             {isAnalyzing
               ? 'AI is analyzing your baby\'s sounds'
               : isRecording 
-                ? 'Tap again to stop and analyze' 
-                : 'Tap to start recording baby sounds'
+                ? 'Tap the red stop button to finish recording' 
+                : 'Tap the microphone to start recording baby sounds'
             }
           </p>
         </div>
