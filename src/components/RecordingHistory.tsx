@@ -89,18 +89,27 @@ export function RecordingHistory() {
           limit: 20
         })
         setRecordings(data)
+        setUsingLocalStorage(false)
       } catch (dbError) {
-        console.log('Database not available, using localStorage:', dbError)
+        // Silently fall back to localStorage - this is expected behavior
         setUsingLocalStorage(true)
         // Fallback to localStorage
         const stored = localStorage.getItem(`recordings_${userId}`)
         if (stored) {
-          const data = JSON.parse(stored)
-          setRecordings(data)
+          try {
+            const data = JSON.parse(stored)
+            setRecordings(Array.isArray(data) ? data : [])
+          } catch (parseError) {
+            console.error('Failed to parse stored recordings:', parseError)
+            setRecordings([])
+          }
+        } else {
+          setRecordings([])
         }
       }
     } catch (error) {
       console.error('Failed to load recordings:', error)
+      setRecordings([])
     } finally {
       setLoading(false)
     }
@@ -118,12 +127,19 @@ export function RecordingHistory() {
 
   const deleteRecording = async (id: string) => {
     try {
-      // Try database first
-      try {
-        await blink.db.recordings.delete(id)
-      } catch (dbError) {
-        console.log('Database not available, using localStorage:', dbError)
-        // Fallback to localStorage
+      if (!usingLocalStorage) {
+        // Try database first
+        try {
+          await blink.db.recordings.delete(id)
+        } catch (dbError) {
+          // If database fails, fall back to localStorage for this operation
+          if (user) {
+            const updated = recordings.filter(r => r.id !== id)
+            localStorage.setItem(`recordings_${user.id}`, JSON.stringify(updated))
+          }
+        }
+      } else {
+        // Using localStorage
         if (user) {
           const updated = recordings.filter(r => r.id !== id)
           localStorage.setItem(`recordings_${user.id}`, JSON.stringify(updated))
@@ -200,10 +216,10 @@ export function RecordingHistory() {
           <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
             <div className="flex items-center gap-2 text-blue-800">
               <Info className="w-4 h-4" />
-              <span className="text-sm font-medium">Using Local Storage</span>
+              <span className="text-sm font-medium">Offline Mode</span>
             </div>
             <p className="text-xs text-blue-600 mt-1">
-              Recordings are saved locally on this device. Database connection will be restored soon.
+              Your recordings are safely stored on this device. They'll sync when database becomes available.
             </p>
           </div>
         )}

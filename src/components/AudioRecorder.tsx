@@ -6,11 +6,11 @@ import { blink } from '@/blink/client'
 
 interface AudioRecorderProps {
   onRecordingComplete: (audioData: string, analysis: any) => void
-  isAnalyzing: boolean
 }
 
-export function AudioRecorder({ onRecordingComplete, isAnalyzing }: AudioRecorderProps) {
+export function AudioRecorder({ onRecordingComplete }: AudioRecorderProps) {
   const [isRecording, setIsRecording] = useState(false)
+  const [isAnalyzing, setIsAnalyzing] = useState(false)
   const [audioLevel, setAudioLevel] = useState(0)
   const mediaRecorderRef = useRef<MediaRecorder | null>(null)
   const audioChunksRef = useRef<Blob[]>([])
@@ -38,6 +38,8 @@ export function AudioRecorder({ onRecordingComplete, isAnalyzing }: AudioRecorde
       }
 
       mediaRecorder.onstop = async () => {
+        setIsAnalyzing(true)
+        
         const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/wav' })
         
         // Convert to base64 for AI analysis
@@ -59,6 +61,8 @@ export function AudioRecorder({ onRecordingComplete, isAnalyzing }: AudioRecorde
         } catch (error) {
           console.error('Audio analysis failed:', error)
           onRecordingComplete(base64, null)
+        } finally {
+          setIsAnalyzing(false)
         }
 
         // Clean up
@@ -84,6 +88,16 @@ export function AudioRecorder({ onRecordingComplete, isAnalyzing }: AudioRecorde
       if (animationFrameRef.current) {
         cancelAnimationFrame(animationFrameRef.current)
       }
+    }
+  }
+
+  const toggleRecording = () => {
+    if (isAnalyzing) return // Prevent action while analyzing
+    
+    if (isRecording) {
+      stopRecording()
+    } else {
+      startRecording()
     }
   }
 
@@ -148,15 +162,19 @@ export function AudioRecorder({ onRecordingComplete, isAnalyzing }: AudioRecorde
           <div className="relative inline-block">
             <Button
               size="lg"
-              onClick={isRecording ? stopRecording : startRecording}
+              onClick={toggleRecording}
               disabled={isAnalyzing}
               className={`w-20 h-20 rounded-full transition-all duration-300 ${
-                isRecording 
-                  ? 'bg-red-500 hover:bg-red-600 animate-pulse' 
-                  : 'bg-primary hover:bg-primary/90'
+                isAnalyzing
+                  ? 'bg-accent hover:bg-accent/90'
+                  : isRecording 
+                    ? 'bg-red-500 hover:bg-red-600 animate-pulse' 
+                    : 'bg-primary hover:bg-primary/90'
               }`}
             >
-              {isRecording ? (
+              {isAnalyzing ? (
+                <div className="animate-spin w-8 h-8 border-2 border-white border-t-transparent rounded-full" />
+              ) : isRecording ? (
                 <Square className="w-8 h-8" />
               ) : (
                 <Mic className="w-8 h-8" />
@@ -177,12 +195,19 @@ export function AudioRecorder({ onRecordingComplete, isAnalyzing }: AudioRecorde
 
         <div className="space-y-2">
           <h3 className="font-medium text-lg">
-            {isRecording ? 'Listening...' : 'Tap to Record'}
+            {isAnalyzing 
+              ? 'Analyzing...' 
+              : isRecording 
+                ? 'Recording...' 
+                : 'Tap to Record'
+            }
           </h3>
           <p className="text-sm text-muted-foreground">
-            {isRecording 
-              ? 'Recording your baby\'s sounds' 
-              : 'Hold the button to capture and analyze baby sounds'
+            {isAnalyzing
+              ? 'AI is analyzing your baby\'s sounds'
+              : isRecording 
+                ? 'Tap again to stop and analyze' 
+                : 'Tap to start recording baby sounds'
             }
           </p>
         </div>

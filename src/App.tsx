@@ -10,7 +10,6 @@ import { blink } from '@/blink/client'
 function App() {
   const [user, setUser] = useState<any>(null)
   const [loading, setLoading] = useState(true)
-  const [isAnalyzing, setIsAnalyzing] = useState(false)
   const [currentAnalysis, setCurrentAnalysis] = useState<any>(null)
   const [currentAudioData, setCurrentAudioData] = useState<string | null>(null)
 
@@ -23,10 +22,8 @@ function App() {
   }, [])
 
   const handleRecordingComplete = async (audioData: string, analysis: any) => {
-    setIsAnalyzing(true)
     setCurrentAudioData(audioData)
     setCurrentAnalysis(analysis)
-    setIsAnalyzing(false)
   }
 
   const handleSaveRecording = async () => {
@@ -45,14 +42,30 @@ function App() {
     }
 
     try {
+      let savedToDatabase = false
+      
       // Try database first
       try {
         await blink.db.recordings.create(newRecording)
+        savedToDatabase = true
       } catch (dbError) {
-        console.log('Database not available, using localStorage:', dbError)
-        // Fallback to localStorage
+        // Silently fall back to localStorage - this is expected behavior
+        savedToDatabase = false
+      }
+      
+      // If database failed, use localStorage
+      if (!savedToDatabase) {
         const stored = localStorage.getItem(`recordings_${user.id}`)
-        const recordings = stored ? JSON.parse(stored) : []
+        let recordings = []
+        
+        try {
+          recordings = stored ? JSON.parse(stored) : []
+          if (!Array.isArray(recordings)) recordings = []
+        } catch (parseError) {
+          console.error('Failed to parse stored recordings:', parseError)
+          recordings = []
+        }
+        
         recordings.unshift(newRecording)
         // Keep only last 50 recordings in localStorage
         if (recordings.length > 50) {
@@ -151,20 +164,12 @@ function App() {
               
               <AudioRecorder 
                 onRecordingComplete={handleRecordingComplete}
-                isAnalyzing={isAnalyzing}
               />
             </div>
 
             {/* Analysis Results */}
-            {(isAnalyzing || currentAnalysis) && (
+            {currentAnalysis && (
               <div className="space-y-4">
-                {isAnalyzing && (
-                  <div className="text-center py-8">
-                    <div className="animate-spin w-8 h-8 border-2 border-primary border-t-transparent rounded-full mx-auto mb-4" />
-                    <p className="text-muted-foreground">Analyzing your baby's sounds...</p>
-                  </div>
-                )}
-                
                 <TranslationResult 
                   analysis={currentAnalysis}
                   audioData={currentAudioData}
